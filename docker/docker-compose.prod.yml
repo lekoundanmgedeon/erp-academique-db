@@ -1,0 +1,23 @@
+# erp-academique-db/docker/docker-compose.prod.yml
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15
+    container_name: erp-db-prod
+    env_file:
+      - ../config/prod.env
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data_prod:/var/lib/postgresql/data
+      - ../scripts/init:/docker-entrypoint-initdb.d
+    networks:
+      - erp-network
+
+volumes:
+  db_data_prod:
+
+networks:
+  erp-network:
+    driver: bridge
