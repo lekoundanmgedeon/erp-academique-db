@@ -1006,4 +1006,28 @@ CREATE TABLE epreuve_examen (
 
 COMMENT ON TABLE epreuve_examen IS 'Détails des épreuves d''examen';
 
+
+
+-- =============================================================
+-- MODULE: LLM & Vector Database Integration
+-- =============================================================
+
+-- Enable pgvector extension for vector search (if not already enabled)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Table: LLM Embeddings
+CREATE TABLE llm_embeddings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_type VARCHAR(50) NOT NULL, -- e.g., 'document', 'student', etc.
+    entity_id UUID NOT NULL,          -- Reference to the entity
+    embedding vector(1536) NOT NULL,  -- Adjust dimension if needed
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for fast vector similarity search
+CREATE INDEX IF NOT EXISTS idx_llm_embeddings_vector ON llm_embeddings USING ivfflat (embedding vector_cosine_ops);
+
+COMMENT ON TABLE llm_embeddings IS 'Vector embeddings for LLM integration (pgvector)';
+
 COMMIT ; 
