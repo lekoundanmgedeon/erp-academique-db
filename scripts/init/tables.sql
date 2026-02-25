@@ -9,7 +9,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Table: Années académiques
-CREATE TABLE AnneeAcademique (
+CREATE TABLE IF NOT EXISTS AnneeAcademique (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(10) UNIQUE NOT NULL, -- Ex: '2023-2024'
     date_debut DATE NOT NULL,
@@ -22,7 +22,7 @@ COMMENT ON TABLE AnneeAcademique IS 'Années académiques du système';
 
 -- Table: Cycles d'études
 
-CREATE TABLE Cycle (
+CREATE TABLE IF NOT EXISTS Cycle (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(10) UNIQUE NOT NULL,          -- L, M, D
     designation VARCHAR(100) NOT NULL,         -- Licence, Master, Doctorat
@@ -37,7 +37,7 @@ CREATE TABLE Cycle (
 COMMENT ON TABLE Cycle IS 'Cycles d''études (Licence, Master, Doctorat)';
 
 -- Table: Filières/Programmes d'études
-CREATE TABLE Filiere (
+CREATE TABLE IF NOT EXISTS Filiere (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(10) UNIQUE NOT NULL,
     designation VARCHAR(100) NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE Filiere (
 COMMENT ON TABLE Filiere IS 'Filières et programmes d''études';
 
 -- Table: Niveaux académiques
-CREATE TABLE Niveau (
+CREATE TABLE IF NOT EXISTS Niveau (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cycle_id UUID REFERENCES Cycle(id),
     code VARCHAR(10) UNIQUE NOT NULL, -- Ex: 'L1', 'M1'
@@ -61,7 +61,7 @@ CREATE TABLE Niveau (
 COMMENT ON TABLE Niveau IS 'Niveaux d''études dans chaque cycle';
 
 -- Table: Classes
-CREATE TABLE Classe (
+CREATE TABLE IF NOT EXISTS Classe (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(10) UNIQUE NOT NULL, -- Ex: 'L1-MATH'
     niveau_id UUID REFERENCES Niveau(id),
@@ -72,7 +72,7 @@ CREATE TABLE Classe (
 COMMENT ON TABLE Classe IS 'Classes d''enseignement';
 
 -- Table: Semestres
-CREATE TABLE Semestre (
+CREATE TABLE IF NOT EXISTS Semestre (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     annee_id UUID REFERENCES AnneeAcademique(id),
     code VARCHAR(10) NOT NULL, -- 'S1', 'S2'
@@ -85,7 +85,7 @@ CREATE TABLE Semestre (
 COMMENT ON TABLE Semestre IS 'Semestres académiques';
 
 -- Table: Promotions
-CREATE TABLE promotions (
+CREATE TABLE IF NOT EXISTS promotions (
     id CHAR(5) PRIMARY KEY,
     libelle VARCHAR(100) NOT NULL,
     niveau VARCHAR(50) NOT NULL,
@@ -105,7 +105,7 @@ COMMENT ON TABLE promotions IS 'Promotions d''étudiants';
 
 
 -- Table: Départements
-CREATE TABLE departements (
+CREATE TABLE IF NOT EXISTS departements (
     id CHAR(5) PRIMARY KEY,
     designation VARCHAR(255) NOT NULL,
     categorie VARCHAR(50) NOT NULL CHECK (categorie IN ('Scientifique', 'Lettres', 'Technique')),
@@ -116,7 +116,7 @@ CREATE TABLE departements (
 COMMENT ON TABLE departements IS 'Départements académiques';
 
 -- Table: Enseignants
-CREATE TABLE enseignants (
+CREATE TABLE IF NOT EXISTS enseignants (
     id CHAR(5) PRIMARY KEY,
     departement_id CHAR(5) NOT NULL REFERENCES departements(id),
     nom VARCHAR(100) NOT NULL,
@@ -137,7 +137,7 @@ ADD CONSTRAINT fk_directeur
 FOREIGN KEY (directeur_id) REFERENCES enseignants(id) ON DELETE SET NULL;
 
 -- Table: Diplômes des enseignants
-CREATE TABLE diplomes_enseignants (
+CREATE TABLE IF NOT EXISTS diplomes_enseignants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     enseignant_id VARCHAR(5) NOT NULL REFERENCES enseignants(id) ON DELETE CASCADE,
     intitule VARCHAR(255) NOT NULL,
@@ -150,7 +150,7 @@ CREATE TABLE diplomes_enseignants (
 COMMENT ON TABLE diplomes_enseignants IS 'Diplômes et qualifications des enseignants';
 
 -- Table: Types de contrats
-CREATE TABLE types_contrat (
+CREATE TABLE IF NOT EXISTS types_contrat (
     code VARCHAR(3) PRIMARY KEY,
     libelle VARCHAR(100) NOT NULL,
     duree_max_mois INTEGER
@@ -159,7 +159,7 @@ CREATE TABLE types_contrat (
 COMMENT ON TABLE types_contrat IS 'Types de contrats de travail';
 
 -- Table: Contrats des enseignants
-CREATE TABLE contrats (
+CREATE TABLE IF NOT EXISTS contrats (
     id VARCHAR(5) PRIMARY KEY,
     enseignant_id VARCHAR(5) NOT NULL REFERENCES enseignants(id),
     type_contrat VARCHAR(3) NOT NULL REFERENCES types_contrat(code),
@@ -173,7 +173,7 @@ CREATE TABLE contrats (
 COMMENT ON TABLE contrats IS 'Contrats de travail des enseignants';
 
 -- Table: Historique des contrats
-CREATE TABLE historique_contrats (
+CREATE TABLE IF NOT EXISTS historique_contrats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     contrat_id CHAR(5) NOT NULL,
     date_modif TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -191,7 +191,7 @@ COMMENT ON TABLE historique_contrats IS 'Historique des modifications de contrat
 -- Tables pour authentification et gestion des accès
 
 -- Table: Utilisateurs
-CREATE TABLE Utilisateur (
+CREATE TABLE IF NOT EXISTS Utilisateur (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
@@ -204,7 +204,7 @@ CREATE TABLE Utilisateur (
 COMMENT ON TABLE Utilisateur IS 'Comptes utilisateurs (legacy)';
 
 -- Table: Utilisateurs (version actualisée)
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -217,7 +217,7 @@ CREATE TABLE users (
 COMMENT ON TABLE users IS 'Utilisateurs du système';
 
 -- Table: Pays/Nationalités
-CREATE TABLE pays (
+CREATE TABLE IF NOT EXISTS pays (
     code_iso CHAR(2) PRIMARY KEY,
     nom_pays VARCHAR(100) NOT NULL,
     nationalite VARCHAR(100) NOT NULL
@@ -226,7 +226,7 @@ CREATE TABLE pays (
 COMMENT ON TABLE pays IS 'Référentiel des pays';
 
 -- Table: Logs d'import
-CREATE TABLE import_logs (
+CREATE TABLE IF NOT EXISTS import_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type_import VARCHAR(50) NOT NULL,
     fichier_source VARCHAR(255) NOT NULL,
@@ -245,7 +245,7 @@ COMMENT ON TABLE import_logs IS 'Historique des imports de données';
 -- Tables pour modules, cours, horaires et ressources pédagogiques
 
 -- Table: Modules/Cours
-CREATE TABLE Module (
+CREATE TABLE IF NOT EXISTS Module (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(10) UNIQUE NOT NULL,
     designation VARCHAR(100) NOT NULL,
@@ -258,7 +258,7 @@ CREATE TABLE Module (
 COMMENT ON TABLE Module IS 'Modules d''enseignement';
 
 -- Table: Lien Module-Classe-Enseignant
-CREATE TABLE ModuleClasse (
+CREATE TABLE IF NOT EXISTS ModuleClasse (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     module_id UUID REFERENCES Module(id),
     classe_id UUID REFERENCES Classe(id),
@@ -269,7 +269,7 @@ CREATE TABLE ModuleClasse (
 
 COMMENT ON TABLE ModuleClasse IS 'Association module-classe-enseignant';
 
-CREATE TABLE salles (
+CREATE TABLE IF NOT EXISTS salles (
     id CHAR(5) PRIMARY KEY,
     batiment VARCHAR(50) NOT NULL,
     numero VARCHAR(10) NOT NULL,
@@ -280,7 +280,7 @@ CREATE TABLE salles (
 COMMENT ON TABLE salles IS 'Salles de classe et amphithéâtres';
 
 -- Table: Types de cours
-CREATE TABLE types_cours (
+CREATE TABLE IF NOT EXISTS types_cours (
     code CHAR(2) PRIMARY KEY,
     libelle VARCHAR(50) NOT NULL,
     couleur VARCHAR(7) DEFAULT '#FFFFFF'
@@ -289,7 +289,7 @@ CREATE TABLE types_cours (
 COMMENT ON TABLE types_cours IS 'Types de cours (Amphi, TD, TP, etc.)';
 
 -- Table: Cours planifiés
-CREATE TABLE cours (
+CREATE TABLE IF NOT EXISTS cours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     module_classe_id UUID NOT NULL REFERENCES ModuleClasse(id),
     type_cours_code CHAR(2) REFERENCES types_cours(code),
@@ -302,7 +302,7 @@ CREATE TABLE cours (
 COMMENT ON TABLE cours IS 'Sessions de cours planifiées';
 
 -- Table: Créneaux horaires (simples)
-CREATE TABLE creneaux (
+CREATE TABLE IF NOT EXISTS creneaux (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     enseignant_id CHAR(5) NOT NULL REFERENCES enseignants(id),
     module_id UUID NOT NULL REFERENCES Module(id),
@@ -319,7 +319,7 @@ CREATE TABLE creneaux (
 COMMENT ON TABLE creneaux IS 'Créneaux horaires réguliers';
 
 -- Table: Emploi du temps (avec classe)
-CREATE TABLE schedule (
+CREATE TABLE IF NOT EXISTS schedule (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     enseignant_id CHAR(5) NOT NULL REFERENCES enseignants(id),
     module_id UUID NOT NULL REFERENCES Module(id),
@@ -338,7 +338,7 @@ CREATE TABLE schedule (
 COMMENT ON TABLE schedule IS 'Emploi du temps avec classe';
 
 -- Table: Supports de cours
-CREATE TABLE support_de_cours (
+CREATE TABLE IF NOT EXISTS support_de_cours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creneau_id UUID NOT NULL REFERENCES creneaux(id) ON DELETE CASCADE,
     titre VARCHAR(255) NOT NULL,
@@ -361,7 +361,7 @@ COMMENT ON TABLE support_de_cours IS 'Ressources pédagogiques (cours, slides, e
 -- Tables pour concours, candidatures et résultats
 
 -- Table: Types de concours
-CREATE TABLE types_concours (
+CREATE TABLE IF NOT EXISTS types_concours (
     code VARCHAR(20) PRIMARY KEY,
     libelle VARCHAR(255) NOT NULL,
     dossier_requis BOOLEAN DEFAULT TRUE
@@ -370,7 +370,7 @@ CREATE TABLE types_concours (
 COMMENT ON TABLE types_concours IS 'Types de concours (admission, recrutement, etc.)';
 
 -- Table: Concours
-CREATE TABLE concours (
+CREATE TABLE IF NOT EXISTS concours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     designation VARCHAR(255) NOT NULL,
     type_concours VARCHAR(20) NOT NULL REFERENCES types_concours(code),
@@ -389,7 +389,7 @@ CREATE TABLE concours (
 COMMENT ON TABLE concours IS 'Concours d''admission et de recrutement';
 
 -- Table: Épreuves de concours
-CREATE TABLE epreuves_concours (
+CREATE TABLE IF NOT EXISTS epreuves_concours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     concours_id UUID NOT NULL REFERENCES concours(id) ON DELETE CASCADE,
     designation VARCHAR(255) NOT NULL,
@@ -405,7 +405,7 @@ CREATE TABLE epreuves_concours (
 COMMENT ON TABLE epreuves_concours IS 'Épreuves d''un concours';
 
 -- Table: Candidats
-CREATE TABLE candidats (
+CREATE TABLE IF NOT EXISTS candidats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     concours_id UUID NOT NULL REFERENCES concours(id),
     filiere VARCHAR(4) NOT NULL CHECK (filiere IN ('LAP', 'INF', 'DUT', 'AM', 'MT', 'ING')),
@@ -429,7 +429,7 @@ CREATE TABLE candidats (
 COMMENT ON TABLE candidats IS 'Candidats aux concours';
 
 -- Table: Dossiers de candidature v2
-CREATE TABLE dossiers_candidaturev2 (
+CREATE TABLE IF NOT EXISTS dossiers_candidaturev2 (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     candidat_id UUID NOT NULL UNIQUE REFERENCES candidats(id) ON DELETE CASCADE,
     chemin_photo VARCHAR(255) NOT NULL,
@@ -442,7 +442,7 @@ CREATE TABLE dossiers_candidaturev2 (
 COMMENT ON TABLE dossiers_candidaturev2 IS 'Dossiers de candidature';
 
 -- Table: Pièces jointes
-CREATE TABLE pieces_jointes (
+CREATE TABLE IF NOT EXISTS pieces_jointes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     dossier_id UUID NOT NULL REFERENCES dossiers_candidaturev2(id) ON DELETE CASCADE,
     type_piece VARCHAR(50) NOT NULL CHECK (
@@ -459,7 +459,7 @@ CREATE INDEX idx_pieces_type ON pieces_jointes(type_piece);
 COMMENT ON TABLE pieces_jointes IS 'Pièces jointes aux dossiers';
 
 -- Table: Résultats de concours v3
-CREATE TABLE resultats_concoursv3 (
+CREATE TABLE IF NOT EXISTS resultats_concoursv3 (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     concours_id UUID NOT NULL REFERENCES concours(id) ON DELETE CASCADE,
     designation VARCHAR(255) NOT NULL,
@@ -475,7 +475,7 @@ CREATE TABLE resultats_concoursv3 (
 COMMENT ON TABLE resultats_concoursv3 IS 'Résultats compilés des concours';
 
 -- Table: Notes des candidats
-CREATE TABLE notes_candidats (
+CREATE TABLE IF NOT EXISTS notes_candidats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     candidat_id UUID NOT NULL REFERENCES candidats(id) ON DELETE CASCADE,
     epreuve_id UUID NOT NULL REFERENCES epreuves_concours(id) ON DELETE CASCADE,
@@ -490,7 +490,7 @@ CREATE TABLE notes_candidats (
 COMMENT ON TABLE notes_candidats IS 'Notes des candidats pour chaque épreuve';
 
 -- Table: Historique des concours
-CREATE TABLE historique_concours (
+CREATE TABLE IF NOT EXISTS historique_concours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     table_affectee VARCHAR(50) NOT NULL CHECK (table_affectee IN ('concours', 'candidats', 'resultats')),
     operation CHAR(1) NOT NULL CHECK (operation IN ('I', 'U', 'D')),
@@ -511,7 +511,7 @@ COMMENT ON TABLE historique_concours IS 'Audit et traçabilité des concours';
 -- Tables pour profils étudiants, dossiers et parcours
 
 -- Table: Étudiants
-CREATE TABLE Etudiant (
+CREATE TABLE IF NOT EXISTS Etudiant (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     matricule VARCHAR(20) UNIQUE NOT NULL,
     nom VARCHAR(100) NOT NULL,
@@ -529,7 +529,7 @@ CREATE TABLE Etudiant (
 COMMENT ON TABLE Etudiant IS 'Profils des étudiants';
 
 -- Table: Photos d'étudiants
-CREATE TABLE photo_etudiant (
+CREATE TABLE IF NOT EXISTS photo_etudiant (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
     chemin_fichier VARCHAR(500) NOT NULL,
@@ -544,7 +544,7 @@ CREATE TABLE photo_etudiant (
 COMMENT ON TABLE photo_etudiant IS 'Photos d''identité des étudiants';
 
 -- Table: Pièces de dossier
-CREATE TABLE pieces_dossier (
+CREATE TABLE IF NOT EXISTS pieces_dossier (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type_piece VARCHAR(50) NOT NULL CHECK (type_piece IN ('DIPLOME', 'ATTESTATION', 'PHOTO', 'AUTRE')),
     chemin TEXT NOT NULL CHECK (chemin ~ '^/uploads/.*\.(pdf|jpg|png)$'),
@@ -555,7 +555,7 @@ CREATE TABLE pieces_dossier (
 COMMENT ON TABLE pieces_dossier IS 'Pièces constitutives du dossier';
 
 -- Table: Dossiers étudiants
-CREATE TABLE dossiers (
+CREATE TABLE IF NOT EXISTS dossiers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -566,7 +566,7 @@ CREATE TABLE dossiers (
 COMMENT ON TABLE dossiers IS 'Dossiers d''inscription des étudiants';
 
 -- Table: Tuteurs/Responsables légaux
-CREATE TABLE tuteurs (
+CREATE TABLE IF NOT EXISTS tuteurs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
     nom VARCHAR(100) NOT NULL,
@@ -584,7 +584,7 @@ CREATE TABLE tuteurs (
 COMMENT ON TABLE tuteurs IS 'Responsables légaux des étudiants';
 
 -- Table: Liaison dossier-pièces
-CREATE TABLE dossier_pieces (
+CREATE TABLE IF NOT EXISTS dossier_pieces (
     dossier_id UUID NOT NULL REFERENCES dossiers(id) ON DELETE CASCADE,
     piece_id UUID NOT NULL REFERENCES pieces_dossier(id),
     PRIMARY KEY (dossier_id, piece_id)
@@ -593,7 +593,7 @@ CREATE TABLE dossier_pieces (
 COMMENT ON TABLE dossier_pieces IS 'Lien entre dossier et pièces jointes';
 
 -- Table: Historique des dossiers
-CREATE TABLE historique_dossiers (
+CREATE TABLE IF NOT EXISTS historique_dossiers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     dossier_id UUID NOT NULL,
     action VARCHAR(20) CHECK (action IN ('CREATION', 'MODIFICATION', 'VALIDATION')),
@@ -605,7 +605,7 @@ CREATE TABLE historique_dossiers (
 COMMENT ON TABLE historique_dossiers IS 'Suivi des modifications des dossiers';
 
 -- Table: Cursus (parcours académiques)
-CREATE TABLE Cursus (
+CREATE TABLE IF NOT EXISTS Cursus (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID REFERENCES Etudiant(id),
     classe_id UUID REFERENCES Classe(id),
@@ -618,7 +618,7 @@ CREATE TABLE Cursus (
 COMMENT ON TABLE Cursus IS 'Parcours académiques des étudiants';
 
 -- Table: Historique du cursus
-CREATE TABLE HistoriqueCursus (
+CREATE TABLE IF NOT EXISTS HistoriqueCursus (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID REFERENCES Etudiant(id),
     ancienne_classe_id UUID REFERENCES Classe(id),
@@ -634,7 +634,7 @@ CREATE TABLE HistoriqueCursus (
 COMMENT ON TABLE HistoriqueCursus IS 'Suivi des changements de classe/niveau';
 
 -- Table: Diplômes des étudiants
-CREATE TABLE diplomes_etudiant (
+CREATE TABLE IF NOT EXISTS diplomes_etudiant (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
     intitule VARCHAR(255) NOT NULL,
@@ -648,7 +648,7 @@ CREATE TABLE diplomes_etudiant (
 COMMENT ON TABLE diplomes_etudiant IS 'Diplômes antérieurs des étudiants';
 
 -- Table: Attestations de diplômes
-CREATE TABLE attestations_diplomes (
+CREATE TABLE IF NOT EXISTS attestations_diplomes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
     diplome_id UUID NOT NULL REFERENCES diplomes_etudiant(id) ON DELETE CASCADE,
@@ -663,7 +663,7 @@ CREATE TABLE attestations_diplomes (
 COMMENT ON TABLE attestations_diplomes IS 'Attestations de diplômes remises';
 
 -- Table: Inscriptions
-CREATE TABLE inscription (
+CREATE TABLE IF NOT EXISTS inscription (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
     classe_id UUID NOT NULL REFERENCES Classe(id),
@@ -678,7 +678,7 @@ CREATE TABLE inscription (
 COMMENT ON TABLE inscription IS 'Inscriptions annuelles des étudiants';
 
 -- Table: Paiements d'inscription
-CREATE TABLE paiement_inscription (
+CREATE TABLE IF NOT EXISTS paiement_inscription (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     inscription_id UUID NOT NULL REFERENCES inscription(id) ON DELETE CASCADE,
     montant DECIMAL(10,2) NOT NULL CHECK (montant > 0),
@@ -697,7 +697,7 @@ COMMENT ON TABLE paiement_inscription IS 'Paiements liés aux inscriptions';
 -- Tables pour l'évaluation des étudiants et gestion des notes
 
 -- Table: Évaluations
-CREATE TABLE Evaluation (
+CREATE TABLE IF NOT EXISTS Evaluation (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     module_id UUID REFERENCES Module(id),
     type VARCHAR(20) NOT NULL,  -- 'CC', 'TP', 'Examen', 'Projet'
@@ -709,7 +709,7 @@ CREATE TABLE Evaluation (
 COMMENT ON TABLE Evaluation IS 'Types d''évaluation';
 
 -- Table: Sessions d'évaluation
-CREATE TABLE session_evaluation (
+CREATE TABLE IF NOT EXISTS session_evaluation (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     semestre_id UUID REFERENCES Semestre(id),
     annee_id UUID REFERENCES AnneeAcademique(id),
@@ -725,7 +725,7 @@ CREATE TABLE session_evaluation (
 COMMENT ON TABLE session_evaluation IS 'Sessions d''évaluation et examens';
 
 -- Table: Notes
-CREATE TABLE note (
+CREATE TABLE IF NOT EXISTS note (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID REFERENCES Etudiant(id),
     module_id UUID REFERENCES Module(id),
@@ -742,7 +742,7 @@ COMMENT ON TABLE note IS 'Notes des étudiants par module';
 
 
 -- Table: Résultats
-CREATE TABLE resultats (
+CREATE TABLE IF NOT EXISTS resultats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID REFERENCES Etudiant(id),
     semestre_id UUID REFERENCES Semestre(id),
@@ -759,7 +759,7 @@ CREATE TABLE resultats (
 COMMENT ON TABLE resultats IS 'Résultats globaux par semestre';
 
 -- Table: Résultats de semestre (détaillés)
-CREATE TABLE resultat_semestre (
+CREATE TABLE IF NOT EXISTS resultat_semestre (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
     semestre_id UUID NOT NULL REFERENCES Semestre(id),
@@ -777,7 +777,7 @@ CREATE TABLE resultat_semestre (
 COMMENT ON TABLE resultat_semestre IS 'Résultats détaillés par semestre';
 
 -- Table: Notifications
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
     message TEXT NOT NULL,
@@ -790,7 +790,7 @@ CREATE TABLE notifications (
 COMMENT ON TABLE notifications IS 'Notifications envoyées aux étudiants';
 
 -- Table: Historique des notifications
-CREATE TABLE historique_notifications (
+CREATE TABLE IF NOT EXISTS historique_notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     notification_id UUID NOT NULL REFERENCES notifications(id),
     date_modification TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -808,7 +808,7 @@ COMMENT ON TABLE historique_notifications IS 'Suivi des modifications de notific
 -- Tables pour frais, paiements et audit financier
 
 -- Table: Frais académiques
-CREATE TABLE frais_academiques (
+CREATE TABLE IF NOT EXISTS frais_academiques (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
     type VARCHAR(20) NOT NULL CHECK (type IN ('SOUTENANCE', 'DIPLOME', 'BIBLIOTHEQUE')),
@@ -823,7 +823,7 @@ CREATE TABLE frais_academiques (
 COMMENT ON TABLE frais_academiques IS 'Frais académiques (soutenance, diplôme, etc.)';
 
 -- Table: Frais de scolarité
-CREATE TABLE frais_scolarite (
+CREATE TABLE IF NOT EXISTS frais_scolarite (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     filiere_id UUID REFERENCES Filiere(id),
     annee VARCHAR(10) REFERENCES AnneeAcademique(code),
@@ -835,7 +835,7 @@ CREATE TABLE frais_scolarite (
 COMMENT ON TABLE frais_scolarite IS 'Montants de scolarité par filière et année';
 
 -- Table: Paiements de scolarité
-CREATE TABLE paiement_scolarite (
+CREATE TABLE IF NOT EXISTS paiement_scolarite (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     reference VARCHAR(50) UNIQUE,
     etudiant_id UUID REFERENCES Etudiant(id),
@@ -850,7 +850,7 @@ CREATE TABLE paiement_scolarite (
 COMMENT ON TABLE paiement_scolarite IS 'Paiements de scolarité des étudiants';
 
 -- Table: Reçus de paiement
-CREATE TABLE recus_paiement (
+CREATE TABLE IF NOT EXISTS recus_paiement (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paiement_id UUID NOT NULL REFERENCES paiement_scolarite(id),
     numero VARCHAR(20) UNIQUE,
@@ -864,7 +864,7 @@ CREATE TABLE recus_paiement (
 COMMENT ON TABLE recus_paiement IS 'Reçus générés pour les paiements';
 
 -- Table: Audit financier
-CREATE TABLE audit_financier (
+CREATE TABLE IF NOT EXISTS audit_financier (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     table_impactee VARCHAR(30) NOT NULL,
     action CHAR(1) NOT NULL CHECK (action IN ('C', 'U', 'D')),
@@ -878,7 +878,7 @@ CREATE TABLE audit_financier (
 COMMENT ON TABLE audit_financier IS 'Traçabilité des opérations financières';
 
 -- Table: Frais de soutenance
-CREATE TABLE frais_soutenance (
+CREATE TABLE IF NOT EXISTS frais_soutenance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
     montant DECIMAL(10,2) NOT NULL CHECK (montant > 0),
@@ -906,7 +906,7 @@ CREATE TYPE etat_soutenance AS ENUM (
 );
 
 -- Table: Salles de soutenance
-CREATE TABLE salle_soutenance (
+CREATE TABLE IF NOT EXISTS salle_soutenance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nom VARCHAR(50) NOT NULL,
     capacite INTEGER CHECK (capacite > 0),
@@ -917,7 +917,7 @@ CREATE TABLE salle_soutenance (
 COMMENT ON TABLE salle_soutenance IS 'Salles dédiées aux soutenances';
 
 -- Table: Soutenances
-CREATE TABLE soutenances (
+CREATE TABLE IF NOT EXISTS soutenances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
     soutenance_ref VARCHAR(50) UNIQUE NOT NULL,
@@ -934,7 +934,7 @@ CREATE TABLE soutenances (
 COMMENT ON TABLE soutenances IS 'Soutenances de mémoire/thèse';
 
 -- Table: Procès-verbaux de soutenance
-CREATE TABLE pv_soutenance (
+CREATE TABLE IF NOT EXISTS pv_soutenance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     soutenance_id UUID NOT NULL REFERENCES soutenances(id) ON DELETE CASCADE,
     redige_par CHAR(5) NOT NULL REFERENCES enseignants(id),
@@ -946,7 +946,7 @@ CREATE TABLE pv_soutenance (
 COMMENT ON TABLE pv_soutenance IS 'Procès-verbaux des soutenances';
 
 -- Table: Jurys de soutenance
-CREATE TABLE soutenance_jurys (
+CREATE TABLE IF NOT EXISTS soutenance_jurys (
     soutenance_id UUID NOT NULL REFERENCES soutenances(id) ON DELETE CASCADE,
     enseignant_id CHAR(5) NOT NULL REFERENCES enseignants(id),
     role VARCHAR(50), -- 'Président', 'Rapporteur', 'Examinateur'
@@ -964,7 +964,7 @@ COMMENT ON TABLE soutenance_jurys IS 'Composition des jurys de soutenance';
 -- Tables pour planification et supervision des examens
 
 -- Table: Planification des examens
-CREATE TABLE planification_examen (
+CREATE TABLE IF NOT EXISTS planification_examen (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES session_evaluation(id),
     filiere_id UUID NOT NULL REFERENCES Filiere(id),
@@ -979,7 +979,7 @@ CREATE TABLE planification_examen (
 COMMENT ON TABLE planification_examen IS 'Planification des sessions d''examens';
 
 -- Table: Examens planifiés
-CREATE TABLE examens_planifies (
+CREATE TABLE IF NOT EXISTS examens_planifies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     planification_id UUID NOT NULL REFERENCES planification_examen(id),
     module_id UUID NOT NULL REFERENCES Module(id),
@@ -994,7 +994,7 @@ CREATE TABLE examens_planifies (
 COMMENT ON TABLE examens_planifies IS 'Examens planifiés avec horaires';
 
 -- Table: Épreuves d'examen
-CREATE TABLE epreuve_examen (
+CREATE TABLE IF NOT EXISTS epreuve_examen (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     examen_id UUID NOT NULL REFERENCES examens_planifies(id),
     numero_epreuve INTEGER NOT NULL,
@@ -1016,7 +1016,7 @@ COMMENT ON TABLE epreuve_examen IS 'Détails des épreuves d''examen';
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Table: LLM Embeddings
-CREATE TABLE llm_embeddings (
+CREATE TABLE IF NOT EXISTS llm_embeddings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_type VARCHAR(50) NOT NULL, -- e.g., 'document', 'student', etc.
     entity_id UUID NOT NULL,          -- Reference to the entity
