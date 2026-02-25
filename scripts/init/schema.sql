@@ -147,40 +147,35 @@ CREATE TABLE IF NOT EXISTS teacher_degree (
 
 COMMENT ON TABLE teacher_degree IS 'Diplômes et qualifications des enseignants';
 
--- Table: Types de contrats
-CREATE TABLE IF NOT EXISTS types_contrat (
+CREATE TABLE IF NOT EXISTS contract_type (
     code VARCHAR(3) PRIMARY KEY,
-    libelle VARCHAR(100) NOT NULL,
-    duree_max_mois INTEGER
+    label VARCHAR(100) NOT NULL,
+    max_duration_months INTEGER
 );
 
-COMMENT ON TABLE types_contrat IS 'Types de contrats de travail';
+COMMENT ON TABLE contract_type IS 'Types de contrats de travail';
 
--- Table: Contrats des enseignants
-CREATE TABLE IF NOT EXISTS contrats (
+CREATE TABLE IF NOT EXISTS teacher_contract (
     id VARCHAR(5) PRIMARY KEY,
-    enseignant_id VARCHAR(5) NOT NULL REFERENCES enseignants(id),
-    type_contrat VARCHAR(3) NOT NULL REFERENCES types_contrat(code),
-    annee_id UUID NOT NULL REFERENCES AnneeAcademique(id),
-    date_debut DATE NOT NULL,
-    date_fin DATE NOT NULL,
-    heures_statutaires INTEGER NOT NULL CHECK (heures_statutaires > 0),
-    CONSTRAINT dates_coherentes CHECK (date_fin > date_debut)
+    teacher_id VARCHAR(5) NOT NULL REFERENCES teacher(id),
+    contract_type VARCHAR(3) NOT NULL REFERENCES contract_type(code),
+    year_id UUID NOT NULL REFERENCES academic_year(id),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    statutory_hours INTEGER NOT NULL CHECK (statutory_hours > 0),
+    CONSTRAINT valid_dates CHECK (end_date > start_date)
 );
 
-COMMENT ON TABLE contrats IS 'Contrats de travail des enseignants';
+COMMENT ON TABLE teacher_contract IS 'Contrats de travail des enseignants';
 
--- Table: Historique des contrats
-CREATE TABLE IF NOT EXISTS historique_contrats (
+CREATE TABLE IF NOT EXISTS contract_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contrat_id CHAR(5) NOT NULL,
-    date_modif TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    modifie_par VARCHAR(100) NOT NULL,
-    anciennes_valeurs JSONB NOT NULL
+    contract_id CHAR(5) NOT NULL,
+    modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(100) NOT NULL,
+    old_values JSONB NOT NULL
 );
-
-COMMENT ON TABLE historique_contrats IS 'Historique des modifications de contrats';
-
+COMMENT ON TABLE contract_history IS 'Historique des modifications de contrats';
 
 
 -- =============================================================
@@ -238,265 +233,249 @@ COMMENT ON TABLE import_log IS 'Historique des imports de données';
 -- =============================================================
 -- Tables pour modules, cours, horaires et ressources pédagogiques
 
--- Table: Modules/Cours
-CREATE TABLE IF NOT EXISTS Module (
+CREATE TABLE IF NOT EXISTS course_module (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(10) UNIQUE NOT NULL,
-    designation VARCHAR(100) NOT NULL,
-    credit INTEGER NOT NULL,
+    label VARCHAR(100) NOT NULL,
+    credits INTEGER NOT NULL,
     coefficient INTEGER DEFAULT 1,
-    volume_horaire INTEGER, -- en heures
-    responsable_id VARCHAR(5) REFERENCES enseignants(id)
+    hours_volume INTEGER, -- en heures
+    teacher_id VARCHAR(5) REFERENCES teacher(id)
 );
 
-COMMENT ON TABLE Module IS 'Modules d''enseignement';
+COMMENT ON TABLE course_module IS 'Modules d''enseignement';
 
--- Table: Lien Module-Classe-Enseignant
-CREATE TABLE IF NOT EXISTS ModuleClasse (
+CREATE TABLE IF NOT EXISTS module_class (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_id UUID REFERENCES Module(id),
-    classe_id UUID REFERENCES Classe(id),
-    semestre_id UUID REFERENCES Semestre(id),
-    enseignant_id CHAR(5) REFERENCES enseignants(id),
-    CONSTRAINT module_classe_unique UNIQUE (module_id, classe_id, semestre_id, enseignant_id)
+    module_id UUID REFERENCES course_module(id),
+    class_id UUID REFERENCES class(id),
+    semester_id UUID REFERENCES semester(id),
+    teacher_id CHAR(5) REFERENCES teacher(id),
+    CONSTRAINT module_class_unique UNIQUE (module_id, class_id, semester_id, teacher_id)
 );
 
-COMMENT ON TABLE ModuleClasse IS 'Association module-classe-enseignant';
+COMMENT ON TABLE module_class IS 'Association module-classe-enseignant';
 
-CREATE TABLE IF NOT EXISTS salles (
+CREATE TABLE IF NOT EXISTS classroom (
     id CHAR(5) PRIMARY KEY,
-    batiment VARCHAR(50) NOT NULL,
-    numero VARCHAR(10) NOT NULL,
-    capacite INTEGER CHECK (capacite > 0),
+    building VARCHAR(50) NOT NULL,
+    room_number VARCHAR(10) NOT NULL,
+    capacity INTEGER CHECK (capacity > 0),
     type VARCHAR(50) CHECK (type IN ('Amphi', 'Cours', 'TD', 'TP', 'Labo'))
 );
 
-COMMENT ON TABLE salles IS 'Salles de classe et amphithéâtres';
+COMMENT ON TABLE classroom IS 'Salles de classe et amphithéâtres';
 
--- Table: Types de cours
-CREATE TABLE IF NOT EXISTS types_cours (
+CREATE TABLE IF NOT EXISTS course_type (
     code CHAR(2) PRIMARY KEY,
-    libelle VARCHAR(50) NOT NULL,
-    couleur VARCHAR(7) DEFAULT '#FFFFFF'
+    label VARCHAR(50) NOT NULL,
+    color VARCHAR(7) DEFAULT '#FFFFFF'
 );
 
-COMMENT ON TABLE types_cours IS 'Types de cours (Amphi, TD, TP, etc.)';
+COMMENT ON TABLE course_type IS 'Types de cours (Amphi, TD, TP, etc.)';
 
--- Table: Cours planifiés
-CREATE TABLE IF NOT EXISTS cours (
+CREATE TABLE IF NOT EXISTS planned_course (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_classe_id UUID NOT NULL REFERENCES ModuleClasse(id),
-    type_cours_code CHAR(2) REFERENCES types_cours(code),
-    date_debut TIMESTAMP NOT NULL,
-    date_fin TIMESTAMP NOT NULL,
-    salle_id CHAR(5) REFERENCES salles(id),
-    CONSTRAINT cours_unique UNIQUE (module_classe_id, date_debut, date_fin)
+    module_class_id UUID NOT NULL REFERENCES module_class(id),
+    course_type_code CHAR(2) REFERENCES course_type(code),
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
+    classroom_id CHAR(5) REFERENCES classroom(id),
+    CONSTRAINT planned_course_unique UNIQUE (module_class_id, start_date, end_date)
 );
 
-COMMENT ON TABLE cours IS 'Sessions de cours planifiées';
+COMMENT ON TABLE planned_course IS 'Sessions de cours planifiées';
 
--- Table: Créneaux horaires (simples)
-CREATE TABLE IF NOT EXISTS creneaux (
+CREATE TABLE IF NOT EXISTS time_slot (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    enseignant_id CHAR(5) NOT NULL REFERENCES enseignants(id),
-    module_id UUID NOT NULL REFERENCES Module(id),
-    salle_id CHAR(5) NOT NULL REFERENCES salles(id),
-    type_cours CHAR(2) NOT NULL REFERENCES types_cours(code),
-    semestre_id UUID NOT NULL REFERENCES Semestre(id),
-    jour VARCHAR(8) NOT NULL CHECK (jour IN ('LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI')),
-    heure_debut TIME NOT NULL,
-    heure_fin TIME NOT NULL,
-    CONSTRAINT duree_valide CHECK (heure_fin > heure_debut),
-    CONSTRAINT pas_chevauchement UNIQUE (salle_id, jour, heure_debut, heure_fin)
+    teacher_id CHAR(5) NOT NULL REFERENCES teacher(id),
+    module_id UUID NOT NULL REFERENCES course_module(id),
+    classroom_id CHAR(5) NOT NULL REFERENCES classroom(id),
+    course_type CHAR(2) NOT NULL REFERENCES course_type(code),
+    semester_id UUID NOT NULL REFERENCES semester(id),
+    day VARCHAR(8) NOT NULL CHECK (day IN ('LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI')),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    CONSTRAINT valid_duration CHECK (end_time > start_time),
+    CONSTRAINT no_overlap UNIQUE (classroom_id, day, start_time, end_time)
 );
 
-COMMENT ON TABLE creneaux IS 'Créneaux horaires réguliers';
+COMMENT ON TABLE time_slot IS 'Créneaux horaires réguliers';
 
--- Table: Emploi du temps (avec classe)
-CREATE TABLE IF NOT EXISTS schedule (
+CREATE TABLE IF NOT EXISTS class_schedule (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    enseignant_id CHAR(5) NOT NULL REFERENCES enseignants(id),
-    module_id UUID NOT NULL REFERENCES Module(id),
-    salle_id CHAR(5) NOT NULL REFERENCES salles(id),
-    classe_code VARCHAR(10) NOT NULL REFERENCES Classe(code),
-    type_cours CHAR(2) NOT NULL REFERENCES types_cours(code),
-    semestre_id UUID NOT NULL REFERENCES Semestre(id),
-    jour VARCHAR(8) NOT NULL CHECK (jour IN ('LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI')),
-    heure_debut TIME NOT NULL,
-    heure_fin TIME NOT NULL,
-    CONSTRAINT duree_valide CHECK (heure_fin > heure_debut),
-    CONSTRAINT pas_chevauchement_schedule UNIQUE (classe_code, jour, heure_debut, heure_fin),
-    CONSTRAINT pas_chevauchement_horaire UNIQUE (enseignant_id, jour, heure_debut, heure_fin)
+    teacher_id CHAR(5) NOT NULL REFERENCES teacher(id),
+    module_id UUID NOT NULL REFERENCES course_module(id),
+    classroom_id CHAR(5) NOT NULL REFERENCES classroom(id),
+    class_code VARCHAR(10) NOT NULL REFERENCES class(code),
+    course_type CHAR(2) NOT NULL REFERENCES course_type(code),
+    semester_id UUID NOT NULL REFERENCES semester(id),
+    day VARCHAR(8) NOT NULL CHECK (day IN ('LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI')),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    CONSTRAINT valid_duration CHECK (end_time > start_time),
+    CONSTRAINT no_overlap_schedule UNIQUE (class_code, day, start_time, end_time),
+    CONSTRAINT no_overlap_teacher UNIQUE (teacher_id, day, start_time, end_time)
 );
 
-COMMENT ON TABLE schedule IS 'Emploi du temps avec classe';
+COMMENT ON TABLE class_schedule IS 'Emploi du temps avec classe';
 
--- Table: Supports de cours
-CREATE TABLE IF NOT EXISTS support_de_cours (
+CREATE TABLE IF NOT EXISTS course_material (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    creneau_id UUID NOT NULL REFERENCES creneaux(id) ON DELETE CASCADE,
-    titre VARCHAR(255) NOT NULL,
+    time_slot_id UUID NOT NULL REFERENCES time_slot(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
     description TEXT,
     type VARCHAR(50) NOT NULL CHECK (type IN ('PDF', 'PPT', 'DOC', 'VIDEO', 'LIEN', 'AUTRE')),
-    chemin_fichier VARCHAR(255),
+    file_path VARCHAR(255),
     url VARCHAR(255),
-    date_depot TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    visible BOOLEAN DEFAULT TRUE,
-    auteur_id CHAR(5) NOT NULL REFERENCES enseignants(id),
+    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_visible BOOLEAN DEFAULT TRUE,
+    author_id CHAR(5) NOT NULL REFERENCES teacher(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE support_de_cours IS 'Ressources pédagogiques (cours, slides, etc.)';
+COMMENT ON TABLE course_material IS 'Ressources pédagogiques (cours, slides, etc.)';
 
 -- =============================================================
 -- MODULE: Gestion des Concours
 -- =============================================================
 -- Tables pour concours, candidatures et résultats
 
--- Table: Types de concours
-CREATE TABLE IF NOT EXISTS types_concours (
+CREATE TABLE IF NOT EXISTS contest_type (
     code VARCHAR(20) PRIMARY KEY,
-    libelle VARCHAR(255) NOT NULL,
-    dossier_requis BOOLEAN DEFAULT TRUE
+    label VARCHAR(255) NOT NULL,
+    file_required BOOLEAN DEFAULT TRUE
 );
 
-COMMENT ON TABLE types_concours IS 'Types de concours (admission, recrutement, etc.)';
+COMMENT ON TABLE contest_type IS 'Types de concours (admission, recrutement, etc.)';
 
--- Table: Concours
-CREATE TABLE IF NOT EXISTS concours (
+CREATE TABLE IF NOT EXISTS contest (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    designation VARCHAR(255) NOT NULL,
-    type_concours VARCHAR(20) NOT NULL REFERENCES types_concours(code),
+    label VARCHAR(255) NOT NULL,
+    contest_type VARCHAR(20) NOT NULL REFERENCES contest_type(code),
     description TEXT,
-    annee_id UUID NOT NULL REFERENCES AnneeAcademique(id),
-    date_debut DATE NOT NULL,
-    date_fin DATE NOT NULL,
-    date_limite_inscription DATE NOT NULL,
-    statut VARCHAR(20) NOT NULL DEFAULT 'planifié' 
-        CHECK (statut IN ('planifié', 'ouvert', 'clôturé', 'annulé')),
+    year_id UUID NOT NULL REFERENCES academic_year(id),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    registration_deadline DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'planifié' 
+        CHECK (status IN ('planifié', 'ouvert', 'clôturé', 'annulé')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT dates_coherentes CHECK (date_fin >= date_debut)
+    CONSTRAINT valid_dates CHECK (end_date >= start_date)
 );
 
-COMMENT ON TABLE concours IS 'Concours d''admission et de recrutement';
+COMMENT ON TABLE contest IS 'Concours d''admission et de recrutement';
 
--- Table: Épreuves de concours
-CREATE TABLE IF NOT EXISTS epreuves_concours (
+CREATE TABLE IF NOT EXISTS contest_exam (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    concours_id UUID NOT NULL REFERENCES concours(id) ON DELETE CASCADE,
-    designation VARCHAR(255) NOT NULL,
+    contest_id UUID NOT NULL REFERENCES contest(id) ON DELETE CASCADE,
+    label VARCHAR(255) NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
     coefficient INTEGER NOT NULL DEFAULT 1 CHECK (coefficient > 0),
-    heure_debut TIME NOT NULL,
-    heure_fin TIME NOT NULL,
-    ordre INTEGER DEFAULT 1 CHECK (ordre > 0),
-    type_epreuve VARCHAR(20) CHECK (type_epreuve IN ('écrit', 'oral', 'pratique')),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    order_num INTEGER DEFAULT 1 CHECK (order_num > 0),
+    exam_type VARCHAR(20) CHECK (exam_type IN ('écrit', 'oral', 'pratique')),
     description TEXT
 );
 
-COMMENT ON TABLE epreuves_concours IS 'Épreuves d''un concours';
+COMMENT ON TABLE contest_exam IS 'Épreuves d''un concours';
 
--- Table: Candidats
-CREATE TABLE IF NOT EXISTS candidats (
+CREATE TABLE IF NOT EXISTS candidate (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    concours_id UUID NOT NULL REFERENCES concours(id),
-    filiere VARCHAR(4) NOT NULL CHECK (filiere IN ('LAP', 'INF', 'DUT', 'AM', 'MT', 'ING')),
-    matricule VARCHAR(20) NOT NULL UNIQUE,
-    nom VARCHAR(100) NOT NULL,
-    prenom VARCHAR(100) NOT NULL,
-    datenais DATE NOT NULL CHECK (datenais > '1900-01-01'),
-    lieunais VARCHAR(100) NOT NULL,
-    sexe VARCHAR(10) NOT NULL,
-    tel VARCHAR(20) NOT NULL CHECK (tel ~ '^\+?[0-9]{10,15}$'),
+    contest_id UUID NOT NULL REFERENCES contest(id),
+    program VARCHAR(4) NOT NULL CHECK (program IN ('LAP', 'INF', 'DUT', 'AM', 'MT', 'ING')),
+    registration_number VARCHAR(20) NOT NULL UNIQUE,
+    last_name VARCHAR(100) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    birth_date DATE NOT NULL CHECK (birth_date > '1900-01-01'),
+    birth_place VARCHAR(100) NOT NULL,
+    gender VARCHAR(10) NOT NULL,
+    phone VARCHAR(20) NOT NULL CHECK (phone ~ '^\+?[0-9]{10,15}$'),
     email VARCHAR(255) CHECK (email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$'),
-    adresse TEXT,
-    ville VARCHAR(100) NOT NULL,
-    nationnalite VARCHAR(100) DEFAULT 'CONGOLAISE',
-    date_inscription TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    address TEXT,
+    city VARCHAR(100) NOT NULL,
+    nationality VARCHAR(100) DEFAULT 'CONGOLAISE',
+    registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unicite_candidature UNIQUE (nom, prenom, datenais, concours_id)
+    CONSTRAINT unique_candidate UNIQUE (last_name, first_name, birth_date, contest_id)
 );
 
-COMMENT ON TABLE candidats IS 'Candidats aux concours';
+COMMENT ON TABLE candidate IS 'Candidats aux concours';
 
--- Table: Dossiers de candidature v2
-CREATE TABLE IF NOT EXISTS dossiers_candidaturev2 (
+CREATE TABLE IF NOT EXISTS candidate_file (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidat_id UUID NOT NULL UNIQUE REFERENCES candidats(id) ON DELETE CASCADE,
-    chemin_photo VARCHAR(255) NOT NULL,
-    date_depot TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    statut VARCHAR(20) DEFAULT 'incomplet' CHECK (statut IN ('incomplet', 'complet', 'verifie', 'rejete')),
+    candidate_id UUID NOT NULL UNIQUE REFERENCES candidate(id) ON DELETE CASCADE,
+    photo_path VARCHAR(255) NOT NULL,
+    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) DEFAULT 'incomplet' CHECK (status IN ('incomplet', 'complet', 'verifie', 'rejete')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE dossiers_candidaturev2 IS 'Dossiers de candidature';
+COMMENT ON TABLE candidate_file IS 'Dossiers de candidature';
 
--- Table: Pièces jointes
-CREATE TABLE IF NOT EXISTS pieces_jointes (
+CREATE TABLE IF NOT EXISTS attachment (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    dossier_id UUID NOT NULL REFERENCES dossiers_candidaturev2(id) ON DELETE CASCADE,
-    type_piece VARCHAR(50) NOT NULL CHECK (
-        type_piece IN ('DIPLOME', 'ATTESTATION', 'PHOTO', 'CV', 'LETTRE', 'AUTRE')
+    candidate_file_id UUID NOT NULL REFERENCES candidate_file(id) ON DELETE CASCADE,
+    attachment_type VARCHAR(50) NOT NULL CHECK (
+        attachment_type IN ('DIPLOME', 'ATTESTATION', 'PHOTO', 'CV', 'LETTRE', 'AUTRE')
     ),
-    chemin_fichier VARCHAR(255) NOT NULL,
-    est_obligatoire BOOLEAN DEFAULT TRUE,
-    date_depot TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    file_path VARCHAR(255) NOT NULL,
+    is_required BOOLEAN DEFAULT TRUE,
+    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_pieces_dossier ON pieces_jointes(dossier_id);
-CREATE INDEX idx_pieces_type ON pieces_jointes(type_piece);
+CREATE INDEX idx_attachment_candidate_file ON attachment(candidate_file_id);
+CREATE INDEX idx_attachment_type ON attachment(attachment_type);
 
-COMMENT ON TABLE pieces_jointes IS 'Pièces jointes aux dossiers';
+COMMENT ON TABLE attachment IS 'Pièces jointes aux dossiers';
 
--- Table: Résultats de concours v3
-CREATE TABLE IF NOT EXISTS resultats_concoursv3 (
+CREATE TABLE IF NOT EXISTS contest_result (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    concours_id UUID NOT NULL REFERENCES concours(id) ON DELETE CASCADE,
-    designation VARCHAR(255) NOT NULL,
-    statut VARCHAR(20) NOT NULL DEFAULT 'en attente' CHECK (
-        statut IN ('en attente', 'publié', 'archivé')
+    contest_id UUID NOT NULL REFERENCES contest(id) ON DELETE CASCADE,
+    label VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'en attente' CHECK (
+        status IN ('en attente', 'publié', 'archivé')
     ),
-    date_publication TIMESTAMP,
-    commentaire TEXT,
+    publication_date TIMESTAMP,
+    comment TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE resultats_concoursv3 IS 'Résultats compilés des concours';
+COMMENT ON TABLE contest_result IS 'Résultats compilés des concours';
 
--- Table: Notes des candidats
-CREATE TABLE IF NOT EXISTS notes_candidats (
+CREATE TABLE IF NOT EXISTS candidate_grade (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidat_id UUID NOT NULL REFERENCES candidats(id) ON DELETE CASCADE,
-    epreuve_id UUID NOT NULL REFERENCES epreuves_concours(id) ON DELETE CASCADE,
-    note DECIMAL(5,2) CHECK (note >= 0 AND note <= 20),
+    candidate_id UUID NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
+    contest_exam_id UUID NOT NULL REFERENCES contest_exam(id) ON DELETE CASCADE,
+    grade DECIMAL(5,2) CHECK (grade >= 0 AND grade <= 20),
     appreciation TEXT,
-    correcteur VARCHAR(100),
-    date_notation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    grader VARCHAR(100),
+    grading_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unicite_note UNIQUE (candidat_id, epreuve_id)
+    CONSTRAINT unique_grade UNIQUE (candidate_id, contest_exam_id)
 );
 
-COMMENT ON TABLE notes_candidats IS 'Notes des candidats pour chaque épreuve';
+COMMENT ON TABLE candidate_grade IS 'Notes des candidats pour chaque épreuve';
 
--- Table: Historique des concours
-CREATE TABLE IF NOT EXISTS historique_concours (
+CREATE TABLE IF NOT EXISTS contest_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    table_affectee VARCHAR(50) NOT NULL CHECK (table_affectee IN ('concours', 'candidats', 'resultats')),
+    affected_table VARCHAR(50) NOT NULL CHECK (affected_table IN ('contest', 'candidate', 'result')),
     operation CHAR(1) NOT NULL CHECK (operation IN ('I', 'U', 'D')),
-    id_entite UUID NOT NULL,
-    utilisateur VARCHAR(100) NOT NULL,
-    horodatage TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    anciennes_valeurs JSONB,
-    nouvelles_valeurs JSONB,
-    ip_adresse INET
+    entity_id UUID NOT NULL,
+    user_name VARCHAR(100) NOT NULL,
+    timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    old_values JSONB,
+    new_values JSONB,
+    ip_address INET
 );
 
-COMMENT ON TABLE historique_concours IS 'Audit et traçabilité des concours';
+COMMENT ON TABLE contest_history IS 'Audit et traçabilité des concours';
 
 
 -- =============================================================
@@ -504,185 +483,172 @@ COMMENT ON TABLE historique_concours IS 'Audit et traçabilité des concours';
 -- =============================================================
 -- Tables pour profils étudiants, dossiers et parcours
 
--- Table: Étudiants
-CREATE TABLE IF NOT EXISTS Etudiant (
+CREATE TABLE IF NOT EXISTS student (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    matricule VARCHAR(20) UNIQUE NOT NULL,
-    nom VARCHAR(100) NOT NULL,
-    prenom VARCHAR(100) NOT NULL,
-    sexe VARCHAR(10) NOT NULL,
-    date_naissance DATE,
-    lieu_naissance VARCHAR(255) NOT NULL,
-    telephone VARCHAR(20),
+    registration_number VARCHAR(20) UNIQUE NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    gender VARCHAR(10) NOT NULL,
+    birth_date DATE,
+    birth_place VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
     email VARCHAR(255) CHECK (email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$'),
-    ville VARCHAR(255) NOT NULL,
-    filiere_id UUID REFERENCES Filiere(id),
+    city VARCHAR(255) NOT NULL,
+    program_id UUID REFERENCES program(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE Etudiant IS 'Profils des étudiants';
+COMMENT ON TABLE student IS 'Profils des étudiants';
 
--- Table: Photos d'étudiants
-CREATE TABLE IF NOT EXISTS photo_etudiant (
+CREATE TABLE IF NOT EXISTS student_photo (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
-    chemin_fichier VARCHAR(500) NOT NULL,
-    nom_fichier VARCHAR(255),
-    type_mime VARCHAR(50),
-    taille INTEGER,
+    student_id UUID NOT NULL REFERENCES student(id) ON DELETE CASCADE,
+    file_path VARCHAR(500) NOT NULL,
+    file_name VARCHAR(255),
+    mime_type VARCHAR(50),
+    size INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(etudiant_id)
+    UNIQUE(student_id)
 );
 
-COMMENT ON TABLE photo_etudiant IS 'Photos d''identité des étudiants';
+COMMENT ON TABLE student_photo IS 'Photos d''identité des étudiants';
 
--- Table: Pièces de dossier
-CREATE TABLE IF NOT EXISTS pieces_dossier (
+CREATE TABLE IF NOT EXISTS student_file_piece (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type_piece VARCHAR(50) NOT NULL CHECK (type_piece IN ('DIPLOME', 'ATTESTATION', 'PHOTO', 'AUTRE')),
-    chemin TEXT NOT NULL CHECK (chemin ~ '^/uploads/.*\.(pdf|jpg|png)$'),
-    date_depot TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    statut VARCHAR(20) DEFAULT 'EN_ATTENTE' CHECK (statut IN ('EN_ATTENTE', 'VALIDE', 'REJETE'))
+    piece_type VARCHAR(50) NOT NULL CHECK (piece_type IN ('DIPLOME', 'ATTESTATION', 'PHOTO', 'AUTRE')),
+    file_path TEXT NOT NULL CHECK (file_path ~ '^/uploads/.*\.(pdf|jpg|png)$'),
+    upload_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) DEFAULT 'EN_ATTENTE' CHECK (status IN ('EN_ATTENTE', 'VALIDE', 'REJETE'))
 );
 
-COMMENT ON TABLE pieces_dossier IS 'Pièces constitutives du dossier';
+COMMENT ON TABLE student_file_piece IS 'Pièces constitutives du dossier';
 
--- Table: Dossiers étudiants
-CREATE TABLE IF NOT EXISTS dossiers (
+CREATE TABLE IF NOT EXISTS student_file (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES student(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ,
-    CONSTRAINT fk_etudiant UNIQUE (etudiant_id)
+    CONSTRAINT unique_student UNIQUE (student_id)
 );
 
-COMMENT ON TABLE dossiers IS 'Dossiers d''inscription des étudiants';
+COMMENT ON TABLE student_file IS 'Dossiers d''inscription des étudiants';
 
--- Table: Tuteurs/Responsables légaux
-CREATE TABLE IF NOT EXISTS tuteurs (
+CREATE TABLE IF NOT EXISTS student_guardian (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
-    nom VARCHAR(100) NOT NULL,
-    prenom VARCHAR(100) NOT NULL,
-    tel1 VARCHAR(20) NOT NULL CHECK (tel1 ~ '^\+?[0-9]{10,15}$'),
-    tel2 VARCHAR(20) CHECK (tel2 IS NULL OR tel2 ~ '^\+?[0-9]{10,15}$'),
+    student_id UUID NOT NULL REFERENCES student(id) ON DELETE CASCADE,
+    last_name VARCHAR(100) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    phone1 VARCHAR(20) NOT NULL CHECK (phone1 ~ '^\+?[0-9]{10,15}$'),
+    phone2 VARCHAR(20) CHECK (phone2 IS NULL OR phone2 ~ '^\+?[0-9]{10,15}$'),
     email VARCHAR(255) CHECK (email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$'),
-    nationalite CHAR(2) NOT NULL,
-    adresse VARCHAR(50) NOT NULL,
-    ville VARCHAR(100) NOT NULL,
-    lien_parente VARCHAR(50) CHECK (lien_parente IN ('PERE', 'MERE', 'TUTEUR', 'ONCLE', 'TANTE', 'FRERE', 'SOEUR', 'AUTRE')),
+    nationality CHAR(2) NOT NULL,
+    address VARCHAR(50) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    relationship VARCHAR(50) CHECK (relationship IN ('PERE', 'MERE', 'TUTEUR', 'ONCLE', 'TANTE', 'FRERE', 'SOEUR', 'AUTRE')),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE tuteurs IS 'Responsables légaux des étudiants';
+COMMENT ON TABLE student_guardian IS 'Responsables légaux des étudiants';
 
--- Table: Liaison dossier-pièces
-CREATE TABLE IF NOT EXISTS dossier_pieces (
-    dossier_id UUID NOT NULL REFERENCES dossiers(id) ON DELETE CASCADE,
-    piece_id UUID NOT NULL REFERENCES pieces_dossier(id),
-    PRIMARY KEY (dossier_id, piece_id)
+CREATE TABLE IF NOT EXISTS student_file_attachment (
+    student_file_id UUID NOT NULL REFERENCES student_file(id) ON DELETE CASCADE,
+    file_piece_id UUID NOT NULL REFERENCES student_file_piece(id),
+    PRIMARY KEY (student_file_id, file_piece_id)
 );
 
-COMMENT ON TABLE dossier_pieces IS 'Lien entre dossier et pièces jointes';
+COMMENT ON TABLE student_file_attachment IS 'Lien entre dossier et pièces jointes';
 
--- Table: Historique des dossiers
-CREATE TABLE IF NOT EXISTS historique_dossiers (
+CREATE TABLE IF NOT EXISTS student_file_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    dossier_id UUID NOT NULL,
+    student_file_id UUID NOT NULL,
     action VARCHAR(20) CHECK (action IN ('CREATION', 'MODIFICATION', 'VALIDATION')),
     details JSONB NOT NULL,
-    utilisateur VARCHAR(100) NOT NULL,
-    horodatage TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    user_name VARCHAR(100) NOT NULL,
+    timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE historique_dossiers IS 'Suivi des modifications des dossiers';
+COMMENT ON TABLE student_file_history IS 'Suivi des modifications des dossiers';
 
--- Table: Cursus (parcours académiques)
-CREATE TABLE IF NOT EXISTS Cursus (
+CREATE TABLE IF NOT EXISTS academic_path (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID REFERENCES Etudiant(id),
-    classe_id UUID REFERENCES Classe(id),
-    annee_academique_id UUID REFERENCES AnneeAcademique(id),
-    date_inscription TIMESTAMP DEFAULT NOW(),
-    statut VARCHAR(20) DEFAULT 'actif' CHECK (statut IN ('actif', 'abandon', 'diplômé')),
-    CONSTRAINT cursus_unique UNIQUE (etudiant_id, classe_id, annee_academique_id)
+    student_id UUID REFERENCES student(id),
+    class_id UUID REFERENCES class(id),
+    academic_year_id UUID REFERENCES academic_year(id),
+    registration_date TIMESTAMP DEFAULT NOW(),
+    status VARCHAR(20) DEFAULT 'actif' CHECK (status IN ('actif', 'abandon', 'diplômé')),
+    CONSTRAINT unique_academic_path UNIQUE (student_id, class_id, academic_year_id)
 );
 
-COMMENT ON TABLE Cursus IS 'Parcours académiques des étudiants';
+COMMENT ON TABLE academic_path IS 'Parcours académiques des étudiants';
 
--- Table: Historique du cursus
-CREATE TABLE IF NOT EXISTS HistoriqueCursus (
+CREATE TABLE IF NOT EXISTS academic_path_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID REFERENCES Etudiant(id),
-    ancienne_classe_id UUID REFERENCES Classe(id),
-    nouvelle_classe_id UUID REFERENCES Classe(id),
-    ancienne_annee_academique_id UUID REFERENCES AnneeAcademique(id),
-    nouvelle_annee_academique_id UUID REFERENCES AnneeAcademique(id),
-    ancienne_niveau_id UUID REFERENCES Niveau(id),
-    nouveau_niveau_id UUID REFERENCES Niveau(id),
-    date_changement TIMESTAMP DEFAULT NOW(),
-    raison_changement TEXT
+    student_id UUID REFERENCES student(id),
+    old_class_id UUID REFERENCES class(id),
+    new_class_id UUID REFERENCES class(id),
+    old_academic_year_id UUID REFERENCES academic_year(id),
+    new_academic_year_id UUID REFERENCES academic_year(id),
+    old_level_id UUID REFERENCES academic_level(id),
+    new_level_id UUID REFERENCES academic_level(id),
+    change_date TIMESTAMP DEFAULT NOW(),
+    change_reason TEXT
 );
 
-COMMENT ON TABLE HistoriqueCursus IS 'Suivi des changements de classe/niveau';
+COMMENT ON TABLE academic_path_history IS 'Suivi des changements de classe/niveau';
 
--- Table: Diplômes des étudiants
-CREATE TABLE IF NOT EXISTS diplomes_etudiant (
+CREATE TABLE IF NOT EXISTS student_degree (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
-    intitule VARCHAR(255) NOT NULL,
-    specialite VARCHAR(255),
-    etablissement VARCHAR(255) NOT NULL,
-    annee_obtention INTEGER NOT NULL CHECK (annee_obtention BETWEEN 1900 AND EXTRACT(YEAR FROM CURRENT_DATE)),
-    niveau VARCHAR(50) CHECK (niveau IN ('Licence', 'Master', 'Doctorat', 'Autre')),
-    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    student_id UUID NOT NULL REFERENCES student(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    specialty VARCHAR(255),
+    institution VARCHAR(255) NOT NULL,
+    graduation_year INTEGER NOT NULL CHECK (graduation_year BETWEEN 1900 AND EXTRACT(YEAR FROM CURRENT_DATE)),
+    level VARCHAR(50) CHECK (level IN ('Licence', 'Master', 'Doctorat', 'Autre')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE diplomes_etudiant IS 'Diplômes antérieurs des étudiants';
+COMMENT ON TABLE student_degree IS 'Diplômes antérieurs des étudiants';
 
--- Table: Attestations de diplômes
-CREATE TABLE IF NOT EXISTS attestations_diplomes (
+CREATE TABLE IF NOT EXISTS degree_certificate (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
-    diplome_id UUID NOT NULL REFERENCES diplomes_etudiant(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES student(id) ON DELETE CASCADE,
+    degree_id UUID NOT NULL REFERENCES student_degree(id) ON DELETE CASCADE,
     reference VARCHAR(50) UNIQUE NOT NULL,
-    date_emission DATE NOT NULL DEFAULT CURRENT_DATE,
+    issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
     signature VARCHAR(255) NOT NULL,
-    statut VARCHAR(20) DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'validée', 'rejetée')),
+    status VARCHAR(20) DEFAULT 'en_attente' CHECK (status IN ('en_attente', 'validée', 'rejetée')),
     observations TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE attestations_diplomes IS 'Attestations de diplômes remises';
+COMMENT ON TABLE degree_certificate IS 'Attestations de diplômes remises';
 
--- Table: Inscriptions
-CREATE TABLE IF NOT EXISTS inscription (
+CREATE TABLE IF NOT EXISTS registration (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
-    classe_id UUID NOT NULL REFERENCES Classe(id),
-    annee_academique_id UUID NOT NULL REFERENCES AnneeAcademique(id),
-    date_inscription TIMESTAMP DEFAULT NOW(),
-    statut VARCHAR(20) DEFAULT 'en attente' CHECK (statut IN ('en attente', 'validée', 'annulée')),
-    gestionnaire_id UUID REFERENCES users(id),
-    commentaire TEXT,
-    CONSTRAINT inscription_unique UNIQUE (etudiant_id, classe_id, annee_academique_id)
+    student_id UUID NOT NULL REFERENCES student(id),
+    class_id UUID NOT NULL REFERENCES class(id),
+    academic_year_id UUID NOT NULL REFERENCES academic_year(id),
+    registration_date TIMESTAMP DEFAULT NOW(),
+    status VARCHAR(20) DEFAULT 'en attente' CHECK (status IN ('en attente', 'validée', 'annulée')),
+    manager_id UUID REFERENCES user_account(id),
+    comment TEXT,
+    CONSTRAINT unique_registration UNIQUE (student_id, class_id, academic_year_id)
 );
 
-COMMENT ON TABLE inscription IS 'Inscriptions annuelles des étudiants';
+COMMENT ON TABLE registration IS 'Inscriptions annuelles des étudiants';
 
--- Table: Paiements d'inscription
-CREATE TABLE IF NOT EXISTS paiement_inscription (
+CREATE TABLE IF NOT EXISTS registration_payment (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    inscription_id UUID NOT NULL REFERENCES inscription(id) ON DELETE CASCADE,
-    montant DECIMAL(10,2) NOT NULL CHECK (montant > 0),
-    date_paiement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    mode_paiement VARCHAR(50) CHECK (mode_paiement IN ('espece', 'mobile money', 'virement', 'chèque')),
-    reference_transaction VARCHAR(100) UNIQUE,
-    statut VARCHAR(20) DEFAULT 'en attente' CHECK (statut IN ('en attente', 'confirmé', 'échoué'))
+    registration_id UUID NOT NULL REFERENCES registration(id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    payment_method VARCHAR(50) CHECK (payment_method IN ('espece', 'mobile money', 'virement', 'chèque')),
+    transaction_reference VARCHAR(100) UNIQUE,
+    status VARCHAR(20) DEFAULT 'en attente' CHECK (status IN ('en attente', 'confirmé', 'échoué'))
 );
 
-COMMENT ON TABLE paiement_inscription IS 'Paiements liés aux inscriptions';
+COMMENT ON TABLE registration_payment IS 'Paiements liés aux inscriptions';
 
 
 -- =============================================================
@@ -690,110 +656,103 @@ COMMENT ON TABLE paiement_inscription IS 'Paiements liés aux inscriptions';
 -- =============================================================
 -- Tables pour l'évaluation des étudiants et gestion des notes
 
--- Table: Évaluations
-CREATE TABLE IF NOT EXISTS Evaluation (
+CREATE TABLE IF NOT EXISTS evaluation (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_id UUID REFERENCES Module(id),
+    module_id UUID REFERENCES course_module(id),
     type VARCHAR(20) NOT NULL,  -- 'CC', 'TP', 'Examen', 'Projet'
     coefficient DECIMAL(3,2) DEFAULT 1.00,
-    date_prevue DATE,
-    ponderation INTEGER  -- Ex: 30 pour 30% du module
+    planned_date DATE,
+    weighting INTEGER  -- Ex: 30 pour 30% du module
 );
 
-COMMENT ON TABLE Evaluation IS 'Types d''évaluation';
+COMMENT ON TABLE evaluation IS 'Types d''évaluation';
 
--- Table: Sessions d'évaluation
-CREATE TABLE IF NOT EXISTS session_evaluation (
+CREATE TABLE IF NOT EXISTS evaluation_session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    semestre_id UUID REFERENCES Semestre(id),
-    annee_id UUID REFERENCES AnneeAcademique(id),
+    semester_id UUID REFERENCES semester(id),
+    year_id UUID REFERENCES academic_year(id),
     code VARCHAR(20) UNIQUE NOT NULL,
-    designation VARCHAR(100) NOT NULL,
-    est_rappel BOOLEAN DEFAULT FALSE,
-    etat VARCHAR(10) CHECK (etat IN ('inactive', 'active', 'archivé')),
-    date_debut DATE,
-    date_fin DATE,
-    responsable VARCHAR(50) NOT NULL
+    label VARCHAR(100) NOT NULL,
+    is_reminder BOOLEAN DEFAULT FALSE,
+    status VARCHAR(10) CHECK (status IN ('inactive', 'active', 'archivé')),
+    start_date DATE,
+    end_date DATE,
+    manager VARCHAR(50) NOT NULL
 );
 
-COMMENT ON TABLE session_evaluation IS 'Sessions d''évaluation et examens';
+COMMENT ON TABLE evaluation_session IS 'Sessions d''évaluation et examens';
 
--- Table: Notes
-CREATE TABLE IF NOT EXISTS note (
+CREATE TABLE IF NOT EXISTS student_grade (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID REFERENCES Etudiant(id),
-    module_id UUID REFERENCES Module(id),
-    classe_id UUID REFERENCES Classe(id),
-    session_id UUID REFERENCES session_evaluation(id),
-    note_controle DECIMAL(4,2) CHECK (note_controle BETWEEN 0 AND 20),
-    note_partiel DECIMAL(4,2) CHECK (note_partiel BETWEEN 0 AND 20),
-    note_rappel DECIMAL(4,2) CHECK (note_rappel IS NULL OR (note_rappel BETWEEN 0 AND 20)),
-    statut VARCHAR(20) DEFAULT 'saisie' CHECK (statut IN ('saisie', 'validée', 'publiée')),
-    CONSTRAINT unicite_notes UNIQUE (etudiant_id, module_id, session_id)
+    student_id UUID REFERENCES student(id),
+    module_id UUID REFERENCES course_module(id),
+    class_id UUID REFERENCES class(id),
+    session_id UUID REFERENCES evaluation_session(id),
+    control_grade DECIMAL(4,2) CHECK (control_grade BETWEEN 0 AND 20),
+    partial_grade DECIMAL(4,2) CHECK (partial_grade BETWEEN 0 AND 20),
+    reminder_grade DECIMAL(4,2) CHECK (reminder_grade IS NULL OR (reminder_grade BETWEEN 0 AND 20)),
+    status VARCHAR(20) DEFAULT 'saisie' CHECK (status IN ('saisie', 'validée', 'publiée')),
+    CONSTRAINT unique_student_grade UNIQUE (student_id, module_id, session_id)
 );
 
-COMMENT ON TABLE note IS 'Notes des étudiants par module';
+COMMENT ON TABLE student_grade IS 'Notes des étudiants par module';
 
 
--- Table: Résultats
-CREATE TABLE IF NOT EXISTS resultats (
+CREATE TABLE IF NOT EXISTS student_semester_result (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID REFERENCES Etudiant(id),
-    semestre_id UUID REFERENCES Semestre(id),
-    total_coef INTEGER DEFAULT 0,
-    total_general DECIMAL(6,2) DEFAULT 0,
-    moyenne DECIMAL(5,2) DEFAULT 0,
-    rang INTEGER DEFAULT 0,
-    effectif INTEGER DEFAULT 0,
+    student_id UUID REFERENCES student(id),
+    semester_id UUID REFERENCES semester(id),
+    total_coefficient INTEGER DEFAULT 0,
+    total_score DECIMAL(6,2) DEFAULT 0,
+    average DECIMAL(5,2) DEFAULT 0,
+    rank INTEGER DEFAULT 0,
+    total_students INTEGER DEFAULT 0,
     decision VARCHAR(50),  -- 'Admis', 'Rattrapage', 'Échec'
-    date_publication TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT resultats_unique UNIQUE (etudiant_id, semestre_id)
+    publication_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_student_semester_result UNIQUE (student_id, semester_id)
 );
 
-COMMENT ON TABLE resultats IS 'Résultats globaux par semestre';
+COMMENT ON TABLE student_semester_result IS 'Résultats globaux par semestre';
 
--- Table: Résultats de semestre (détaillés)
-CREATE TABLE IF NOT EXISTS resultat_semestre (
+CREATE TABLE IF NOT EXISTS student_semester_result_detail (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
-    semestre_id UUID NOT NULL REFERENCES Semestre(id),
-    moyenne_generale DECIMAL(5,2),
-    credits_obtenus INTEGER DEFAULT 0,
-    credits_total INTEGER,
-    total_coef INTEGER DEFAULT 0,
-    total_general DECIMAL(6,2) DEFAULT 0,
+    student_id UUID NOT NULL REFERENCES student(id),
+    semester_id UUID NOT NULL REFERENCES semester(id),
+    general_average DECIMAL(5,2),
+    credits_earned INTEGER DEFAULT 0,
+    total_credits INTEGER,
+    total_coefficient INTEGER DEFAULT 0,
+    total_score DECIMAL(6,2) DEFAULT 0,
     decision VARCHAR(50) CHECK (decision IN ('Admis', 'Ajourné', 'Passable', 'Assez Bien', 'Bien', 'Très Bien')),
-    rang INTEGER,
-    date_publication TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT resultat_unique UNIQUE (etudiant_id, semestre_id)
+    rank INTEGER,
+    publication_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_student_semester_result_detail UNIQUE (student_id, semester_id)
 );
 
-COMMENT ON TABLE resultat_semestre IS 'Résultats détaillés par semestre';
+COMMENT ON TABLE student_semester_result_detail IS 'Résultats détaillés par semestre';
 
--- Table: Notifications
-CREATE TABLE IF NOT EXISTS notifications (
+CREATE TABLE IF NOT EXISTS student_notification (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
+    student_id UUID NOT NULL REFERENCES student(id),
     message TEXT NOT NULL,
-    date_envoi TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    lu BOOLEAN DEFAULT FALSE,
-    type_notification VARCHAR(20) CHECK (type_notification IN ('alerte', 'information', 'rappel')),
-    date_limite TIMESTAMPTZ
+    sent_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    is_read BOOLEAN DEFAULT FALSE,
+    notification_type VARCHAR(20) CHECK (notification_type IN ('alerte', 'information', 'rappel')),
+    deadline TIMESTAMPTZ
 );
 
-COMMENT ON TABLE notifications IS 'Notifications envoyées aux étudiants';
+COMMENT ON TABLE student_notification IS 'Notifications envoyées aux étudiants';
 
--- Table: Historique des notifications
-CREATE TABLE IF NOT EXISTS historique_notifications (
+CREATE TABLE IF NOT EXISTS student_notification_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    notification_id UUID NOT NULL REFERENCES notifications(id),
-    date_modification TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    modifie_par VARCHAR(100) NOT NULL,
-    anciennes_valeurs JSONB NOT NULL,
-    nouvelles_valeurs JSONB NOT NULL
+    notification_id UUID NOT NULL REFERENCES student_notification(id),
+    modified_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(100) NOT NULL,
+    old_values JSONB NOT NULL,
+    new_values JSONB NOT NULL
 );
 
-COMMENT ON TABLE historique_notifications IS 'Suivi des modifications de notifications';
+COMMENT ON TABLE student_notification_history IS 'Suivi des modifications de notifications';
 
 
 -- =============================================================
@@ -801,86 +760,80 @@ COMMENT ON TABLE historique_notifications IS 'Suivi des modifications de notific
 -- =============================================================
 -- Tables pour frais, paiements et audit financier
 
--- Table: Frais académiques
-CREATE TABLE IF NOT EXISTS frais_academiques (
+CREATE TABLE IF NOT EXISTS academic_fee (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
+    student_id UUID NOT NULL REFERENCES student(id),
     type VARCHAR(20) NOT NULL CHECK (type IN ('SOUTENANCE', 'DIPLOME', 'BIBLIOTHEQUE')),
-    montant DECIMAL(7,2) NOT NULL CHECK (montant > 0),
-    montant_paye DECIMAL(7,2) NOT NULL DEFAULT 0 CHECK (montant_paye <= montant),
-    date_emission TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    date_echeance DATE,
-    statut VARCHAR(20),
-    UNIQUE (etudiant_id, type)
+    amount DECIMAL(7,2) NOT NULL CHECK (amount > 0),
+    amount_paid DECIMAL(7,2) NOT NULL DEFAULT 0 CHECK (amount_paid <= amount),
+    issue_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    due_date DATE,
+    status VARCHAR(20),
+    UNIQUE (student_id, type)
 );
 
-COMMENT ON TABLE frais_academiques IS 'Frais académiques (soutenance, diplôme, etc.)';
+COMMENT ON TABLE academic_fee IS 'Frais académiques (soutenance, diplôme, etc.)';
 
--- Table: Frais de scolarité
-CREATE TABLE IF NOT EXISTS frais_scolarite (
+CREATE TABLE IF NOT EXISTS tuition_fee (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    filiere_id UUID REFERENCES Filiere(id),
-    annee VARCHAR(10) REFERENCES AnneeAcademique(code),
-    montant_annuel NUMERIC(10,2) NOT NULL,
-    montant_mensuel NUMERIC(10,2) NOT NULL,
-    UNIQUE (filiere_id, annee)
+    program_id UUID REFERENCES program(id),
+    year VARCHAR(10) REFERENCES academic_year(code),
+    annual_amount NUMERIC(10,2) NOT NULL,
+    monthly_amount NUMERIC(10,2) NOT NULL,
+    UNIQUE (program_id, year)
 );
 
-COMMENT ON TABLE frais_scolarite IS 'Montants de scolarité par filière et année';
+COMMENT ON TABLE tuition_fee IS 'Montants de scolarité par filière et année';
 
--- Table: Paiements de scolarité
-CREATE TABLE IF NOT EXISTS paiement_scolarite (
+CREATE TABLE IF NOT EXISTS tuition_payment (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     reference VARCHAR(50) UNIQUE,
-    etudiant_id UUID REFERENCES Etudiant(id),
-    classe_code VARCHAR(10) REFERENCES Classe(code),
-    date_paiement DATE NOT NULL DEFAULT CURRENT_DATE,
-    montant NUMERIC(10,2) NOT NULL,
-    mode_paiement VARCHAR(50),
-    type_paiement VARCHAR(20) CHECK (type_paiement IN ('mensuel', 'annuel')) NOT NULL,
-    mois CHAR(7) NOT NULL CHECK (mois ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+    student_id UUID REFERENCES student(id),
+    class_code VARCHAR(10) REFERENCES class(code),
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    amount NUMERIC(10,2) NOT NULL,
+    payment_method VARCHAR(50),
+    payment_type VARCHAR(20) CHECK (payment_type IN ('mensuel', 'annuel')) NOT NULL,
+    month CHAR(7) NOT NULL CHECK (month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
 );
 
-COMMENT ON TABLE paiement_scolarite IS 'Paiements de scolarité des étudiants';
+COMMENT ON TABLE tuition_payment IS 'Paiements de scolarité des étudiants';
 
--- Table: Reçus de paiement
-CREATE TABLE IF NOT EXISTS recus_paiement (
+CREATE TABLE IF NOT EXISTS payment_receipt (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    paiement_id UUID NOT NULL REFERENCES paiement_scolarite(id),
-    numero VARCHAR(20) UNIQUE,
-    montant DECIMAL(10,2) NOT NULL,
-    date_emission TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    payment_id UUID NOT NULL REFERENCES tuition_payment(id),
+    number VARCHAR(20) UNIQUE,
+    amount DECIMAL(10,2) NOT NULL,
+    issue_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     qrcode BYTEA,
-    signature_electronique TEXT,
+    electronic_signature TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE recus_paiement IS 'Reçus générés pour les paiements';
+COMMENT ON TABLE payment_receipt IS 'Reçus générés pour les paiements';
 
--- Table: Audit financier
-CREATE TABLE IF NOT EXISTS audit_financier (
+CREATE TABLE IF NOT EXISTS financial_audit (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    table_impactee VARCHAR(30) NOT NULL,
+    affected_table VARCHAR(30) NOT NULL,
     action CHAR(1) NOT NULL CHECK (action IN ('C', 'U', 'D')),
-    id_entite UUID NOT NULL,
-    utilisateur VARCHAR(100) NOT NULL,
-    anciennes_valeurs JSONB,
-    nouvelles_valeurs JSONB,
-    horodatage TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    entity_id UUID NOT NULL,
+    user_name VARCHAR(100) NOT NULL,
+    old_values JSONB,
+    new_values JSONB,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE audit_financier IS 'Traçabilité des opérations financières';
+COMMENT ON TABLE financial_audit IS 'Traçabilité des opérations financières';
 
--- Table: Frais de soutenance
-CREATE TABLE IF NOT EXISTS frais_soutenance (
+CREATE TABLE IF NOT EXISTS thesis_fee (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id),
-    montant DECIMAL(10,2) NOT NULL CHECK (montant > 0),
-    date_echeance DATE,
-    statut_paiement VARCHAR(20) DEFAULT 'IMPAYE' CHECK (statut_paiement IN ('IMPAYE', 'PARTIEL', 'PAYE'))
+    student_id UUID NOT NULL REFERENCES student(id),
+    amount DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+    due_date DATE,
+    payment_status VARCHAR(20) DEFAULT 'IMPAYE' CHECK (payment_status IN ('IMPAYE', 'PARTIEL', 'PAYE'))
 );
 
-COMMENT ON TABLE frais_soutenance IS 'Frais spécifiques pour les soutenances';
+COMMENT ON TABLE thesis_fee IS 'Frais spécifiques pour les soutenances';
 
 
 
@@ -899,56 +852,52 @@ CREATE TYPE etat_soutenance AS ENUM (
     'ECHEC'
 );
 
--- Table: Salles de soutenance
-CREATE TABLE IF NOT EXISTS salle_soutenance (
+CREATE TABLE IF NOT EXISTS defense_room (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nom VARCHAR(50) NOT NULL,
-    capacite INTEGER CHECK (capacite > 0),
-    batiment VARCHAR(50) NOT NULL,
-    equipements TEXT[]
+    name VARCHAR(50) NOT NULL,
+    capacity INTEGER CHECK (capacity > 0),
+    building VARCHAR(50) NOT NULL,
+    equipment TEXT[]
 );
 
-COMMENT ON TABLE salle_soutenance IS 'Salles dédiées aux soutenances';
+COMMENT ON TABLE defense_room IS 'Salles dédiées aux soutenances';
 
--- Table: Soutenances
-CREATE TABLE IF NOT EXISTS soutenances (
+CREATE TABLE IF NOT EXISTS defense (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    etudiant_id UUID NOT NULL REFERENCES Etudiant(id) ON DELETE CASCADE,
-    soutenance_ref VARCHAR(50) UNIQUE NOT NULL,
-    soutenance_etat etat_soutenance NOT NULL DEFAULT 'PLANIFIEE',
-    soutenance_theme TEXT NOT NULL,
-    date_soutenance TIMESTAMPTZ NOT NULL,
-    salle_id UUID NOT NULL REFERENCES salle_soutenance(id),
-    no_ordre VARCHAR(10) NOT NULL CHECK (no_ordre ~ '^[A-Z]{1,2}-[0-9]{3}$'),
+    student_id UUID NOT NULL REFERENCES student(id) ON DELETE CASCADE,
+    reference VARCHAR(50) UNIQUE NOT NULL,
+    status etat_soutenance NOT NULL DEFAULT 'PLANIFIEE',
+    theme TEXT NOT NULL,
+    defense_date TIMESTAMPTZ NOT NULL,
+    room_id UUID NOT NULL REFERENCES defense_room(id),
+    order_number VARCHAR(10) NOT NULL CHECK (order_number ~ '^[A-Z]{1,2}-[0-9]{3}$'),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ,
-    CONSTRAINT date_future CHECK (date_soutenance > CURRENT_TIMESTAMP - INTERVAL '1 day')
+    CONSTRAINT future_date CHECK (defense_date > CURRENT_TIMESTAMP - INTERVAL '1 day')
 );
 
-COMMENT ON TABLE soutenances IS 'Soutenances de mémoire/thèse';
+COMMENT ON TABLE defense IS 'Soutenances de mémoire/thèse';
 
--- Table: Procès-verbaux de soutenance
-CREATE TABLE IF NOT EXISTS pv_soutenance (
+CREATE TABLE IF NOT EXISTS defense_report (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    soutenance_id UUID NOT NULL REFERENCES soutenances(id) ON DELETE CASCADE,
-    redige_par CHAR(5) NOT NULL REFERENCES enseignants(id),
-    contenu TEXT,
-    date_redaction TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_soutenance_unique UNIQUE (soutenance_id)
+    defense_id UUID NOT NULL REFERENCES defense(id) ON DELETE CASCADE,
+    written_by CHAR(5) NOT NULL REFERENCES teacher(id),
+    content TEXT,
+    written_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_defense_report UNIQUE (defense_id)
 );
 
-COMMENT ON TABLE pv_soutenance IS 'Procès-verbaux des soutenances';
+COMMENT ON TABLE defense_report IS 'Procès-verbaux des soutenances';
 
--- Table: Jurys de soutenance
-CREATE TABLE IF NOT EXISTS soutenance_jurys (
-    soutenance_id UUID NOT NULL REFERENCES soutenances(id) ON DELETE CASCADE,
-    enseignant_id CHAR(5) NOT NULL REFERENCES enseignants(id),
+CREATE TABLE IF NOT EXISTS defense_jury (
+    defense_id UUID NOT NULL REFERENCES defense(id) ON DELETE CASCADE,
+    teacher_id CHAR(5) NOT NULL REFERENCES teacher(id),
     role VARCHAR(50), -- 'Président', 'Rapporteur', 'Examinateur'
-    note DECIMAL(4,2) CHECK (note BETWEEN 0 AND 20),
-    PRIMARY KEY (soutenance_id, enseignant_id)
+    grade DECIMAL(4,2) CHECK (grade BETWEEN 0 AND 20),
+    PRIMARY KEY (defense_id, teacher_id)
 );
 
-COMMENT ON TABLE soutenance_jurys IS 'Composition des jurys de soutenance';
+COMMENT ON TABLE defense_jury IS 'Composition des jurys de soutenance';
 
 
 
@@ -957,48 +906,45 @@ COMMENT ON TABLE soutenance_jurys IS 'Composition des jurys de soutenance';
 -- =============================================================
 -- Tables pour planification et supervision des examens
 
--- Table: Planification des examens
-CREATE TABLE IF NOT EXISTS planification_examen (
+CREATE TABLE IF NOT EXISTS exam_planning (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id UUID NOT NULL REFERENCES session_evaluation(id),
-    filiere_id UUID NOT NULL REFERENCES Filiere(id),
-    annee_id UUID NOT NULL REFERENCES AnneeAcademique(id),
+    session_id UUID NOT NULL REFERENCES evaluation_session(id),
+    program_id UUID NOT NULL REFERENCES program(id),
+    year_id UUID NOT NULL REFERENCES academic_year(id),
     description TEXT,
-    date_debut DATE NOT NULL,
-    date_fin DATE NOT NULL,
-    responsable VARCHAR(100),
-    UNIQUE (session_id, filiere_id, annee_id)
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    manager VARCHAR(100),
+    UNIQUE (session_id, program_id, year_id)
 );
 
-COMMENT ON TABLE planification_examen IS 'Planification des sessions d''examens';
+COMMENT ON TABLE exam_planning IS 'Planification des sessions d''examens';
 
--- Table: Examens planifiés
-CREATE TABLE IF NOT EXISTS examens_planifies (
+CREATE TABLE IF NOT EXISTS planned_exam (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    planification_id UUID NOT NULL REFERENCES planification_examen(id),
-    module_id UUID NOT NULL REFERENCES Module(id),
-    classe_id UUID NOT NULL REFERENCES Classe(id),
-    date_examen DATE NOT NULL,
-    heure_debut TIME NOT NULL,
-    heure_fin TIME NOT NULL,
-    salle_id CHAR(5) REFERENCES salles(id),
-    superviseur_id CHAR(5) REFERENCES enseignants(id)
+    planning_id UUID NOT NULL REFERENCES exam_planning(id),
+    module_id UUID NOT NULL REFERENCES course_module(id),
+    class_id UUID NOT NULL REFERENCES class(id),
+    exam_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    classroom_id CHAR(5) REFERENCES classroom(id),
+    supervisor_id CHAR(5) REFERENCES teacher(id)
 );
 
-COMMENT ON TABLE examens_planifies IS 'Examens planifiés avec horaires';
+COMMENT ON TABLE planned_exam IS 'Examens planifiés avec horaires';
 
--- Table: Épreuves d'examen
-CREATE TABLE IF NOT EXISTS epreuve_examen (
+CREATE TABLE IF NOT EXISTS exam_test (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    examen_id UUID NOT NULL REFERENCES examens_planifies(id),
-    numero_epreuve INTEGER NOT NULL,
-    designation VARCHAR(255) NOT NULL,
+    exam_id UUID NOT NULL REFERENCES planned_exam(id),
+    test_number INTEGER NOT NULL,
+    label VARCHAR(255) NOT NULL,
     coefficient DECIMAL(3,2) DEFAULT 1.00,
-    duree_minutes INTEGER NOT NULL CHECK (duree_minutes > 0),
+    duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0),
     observation TEXT
 );
 
-COMMENT ON TABLE epreuve_examen IS 'Détails des épreuves d''examen';
+COMMENT ON TABLE exam_test IS 'Détails des épreuves d''examen';
 
 
 
